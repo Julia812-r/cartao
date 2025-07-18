@@ -36,10 +36,11 @@ st.markdown("<h1 style='text-align: center;'>Controle de Empréstimo - GoodCard<
 
 # ----------------- Logo na Sidebar -----------------
 from PIL import Image
+from urllib.request import urlopen
 
-logo_path = "logo_renault.jpg"
 try:
-    logo = Image.open(logo_path)
+    logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
+    logo = Image.open(urlopen(logo_url))
     st.sidebar.image(logo, use_container_width=True)
 except Exception as e:
     st.sidebar.write("Erro ao carregar a logo:", e)
