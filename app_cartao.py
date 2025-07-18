@@ -35,6 +35,8 @@ st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
 st.markdown("<h1 style='text-align: center;'>Controle de Empréstimo - GoodCard</h1>", unsafe_allow_html=True)
 
 # ----------------- Logo na Sidebar -----------------
+from PIL import Image
+
 logo_path = "logo_renault.jpg"
 try:
     logo = Image.open(logo_path)
