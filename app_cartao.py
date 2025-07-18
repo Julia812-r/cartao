@@ -35,7 +35,7 @@ st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
 st.markdown("<h1 style='text-align: center;'>Controle de Empréstimo - GoodCard</h1>", unsafe_allow_html=True)
 
 # ----------------- Logo na Sidebar -----------------
-logo_path = r"C:\Users\pm25625\Downloads\logo renault.jpg"
+logo_path = "logo_renault.jpg"
 try:
     logo = Image.open(logo_path)
     st.sidebar.image(logo, use_container_width=True)
