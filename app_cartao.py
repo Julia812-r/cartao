@@ -35,27 +35,16 @@ st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
 st.markdown("<h1 style='text-align: center;'>Controle de Empréstimo - GoodCard</h1>", unsafe_allow_html=True)
 
 # ----------------- Logo na Sidebar -----------------
-from PIL import Image
-from urllib.request import urlopen
-import streamlit as st
+logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
 
-try:
-    # Carrega imagem da URL
-    logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
-    logo = Image.open(urlopen(logo_url))
-
-    # Redimensiona para largura maior (ex: 320 px)
-    nova_largura = 320
-    proporcao = nova_largura / logo.width
-    nova_altura = int(logo.height * proporcao)
-    logo = logo.resize((nova_largura, nova_altura))
-
-    # Exibe na sidebar
-    st.sidebar.image(logo)
-except Exception as e:
-    st.sidebar.error(f"Erro ao carregar a logo: {e}")
-
-
+st.sidebar.markdown(
+    f"""
+    <div style="text-align: center; padding: 10px 0;">
+        <img src="{logo_url}" style="width: 100%; max-width: 300px; border-radius: 10px;" />
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # ----------------- Funções Auxiliares -----------------
 CSV_FILE = "emprestimos_goodcard.csv"
