@@ -41,9 +41,17 @@ from urllib.request import urlopen
 try:
     logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
     logo = Image.open(urlopen(logo_url))
-    st.sidebar.image(logo, use_container_width=True)
+
+    # Redimensiona a imagem para largura 280px mantendo proporção
+    largura_desejada = 280
+    proporcao = largura_desejada / logo.width
+    altura_nova = int(logo.height * proporcao)
+    logo = logo.resize((largura_desejada, altura_nova))
+
+    st.sidebar.image(logo)
 except Exception as e:
     st.sidebar.write("Erro ao carregar a logo:", e)
+
 
 # ----------------- Funções Auxiliares -----------------
 CSV_FILE = "emprestimos_goodcard.csv"
