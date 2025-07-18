@@ -35,16 +35,15 @@ st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
 st.markdown("<h1 style='text-align: center;'>Controle de Empréstimo - GoodCard</h1>", unsafe_allow_html=True)
 
 # ----------------- Logo na Sidebar -----------------
-logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
+from PIL import Image
+from urllib.request import urlopen
 
-st.sidebar.markdown(
-    f"""
-    <div style="text-align: center; padding: 10px 0;">
-        <img src="{logo_url}" style="width: 100%; max-width: 300px; border-radius: 10px;" />
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+try:
+    logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
+    logo = Image.open(urlopen(logo_url))
+    st.sidebar.image(logo, use_container_width=True)
+except Exception as e:
+    st.sidebar.write("Erro ao carregar a logo:", e)
 
 # ----------------- Funções Auxiliares -----------------
 CSV_FILE = "emprestimos_goodcard.csv"
