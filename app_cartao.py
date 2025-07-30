@@ -139,8 +139,51 @@ A pesquisa levará aproximadamente 7 minutos para ser concluída.
 
 # ----------------- Página: Registros -----------------
 elif menu_opcao == "Registros de Empréstimos":
-    st.subheader("Registros de Empréstimos - Cartão GoodCard")
-    df = carregar_dados()
+    st.subheader("Área Protegida - Registros de Empréstimos")
+
+    # Define a senha correta
+    senha_correta = "renault2025"
+
+    # Inicializa o estado de autenticação
+    if "autenticado" not in st.session_state:
+        st.session_state["autenticado"] = False
+
+    # Se ainda não autenticado, pede a senha
+    if not st.session_state["autenticado"]:
+        senha_entrada = st.text_input("🔐 Digite a senha para acessar os registros:", type="password")
+        if senha_entrada == senha_correta:
+            st.session_state["autenticado"] = True
+            st.success("Acesso autorizado com sucesso.")
+        elif senha_entrada:
+            st.error("Senha incorreta. Tente novamente.")
+        else:
+            st.info("Digite a senha para visualizar os registros.")
+
+    # Se autenticado, exibe os dados
+    if st.session_state["autenticado"]:
+        df = carregar_dados()
+        
+        # Adiciona colunas se não existirem
+        if "Cartão" not in df.columns:
+            df["Cartão"] = ""
+        if "Data Devolução Real" not in df.columns:
+            df["Data Devolução Real"] = ""
+
+        # Converte datas para datetime
+        df["Previsão Devolução"] = pd.to_datetime(df["Previsão Devolução"], dayfirst=True, errors='coerce')
+        df["Data Devolução Real"] = pd.to_datetime(df["Data Devolução Real"], dayfirst=True, errors='coerce')
+
+        # Define status
+        def calcular_status(row):
+            hoje = datetime.now().date()
+            if pd.notnull(row["Data Devolução Real"]):
+                return "Devolvido"
+            elif pd.notnull(row["Previsão Devolução"]) and hoje > row["Previsão Devolução"].date():
+                return "Atrasado"
+            else:
+                return "Em aberto"
+
+        df["Status"] = df.apply(calcular_status, axis=1)
 
     # Filtros
     with st.container():
