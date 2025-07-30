@@ -209,7 +209,7 @@ elif menu_opcao == "Registros de Empréstimos":
         # Garante que colunas texto sejam strings e datas formatadas em string
         colunas_texto = [
             "Nome Solicitante", "Email Solicitante", "Departamento", "IPN Solicitante", "Centro de Custo", "Telefone Solicitante", "Nome Supervisor", "Email Supervisor",
-            "Motivo", "Identificação Veículo", "Data Registro"
+            "Motivo", "Identificação Veículo", "Cartão", "Data Registro"
         ]
 
         for col in colunas_texto:
@@ -235,6 +235,7 @@ elif menu_opcao == "Registros de Empréstimos":
             "Email Supervisor",
             "Motivo",
             "Identificação Veículo",
+            "Cartão",
             "Data Registro",
         ]
 
