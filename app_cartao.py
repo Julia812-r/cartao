@@ -186,21 +186,21 @@ elif menu_opcao == "Registros de Empréstimos":
         df["Status"] = df.apply(calcular_status, axis=1)
 
         # Filtros
-          with st.container():
-            col1, col2 = st.columns(2)
-            with col1:
-              nome_filtro = st.text_input("Filtrar por Nome do Solicitante")
-            with col2:
-              veiculo_filtro = st.text_input("Filtrar por Identificação do Veículo")
+        with st.container():
+          col1, col2 = st.columns(2)
+          with col1:
+            nome_filtro = st.text_input("Filtrar por Nome do Solicitante")
+          with col2:
+            veiculo_filtro = st.text_input("Filtrar por Identificação do Veículo")
 
-            if nome_filtro:
-               df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
-            if veiculo_filtro:
-               df = df[df["Identificação Veículo"].fillna("").astype(str).str.contains(veiculo_filtro, case=False, na=False)]
+          if nome_filtro:
+             df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
+          if veiculo_filtro:
+              df = df[df["Identificação Veículo"].fillna("").astype(str).str.contains(veiculo_filtro, case=False, na=False)]
 
-          st.markdown("### Tabela de Empréstimos")
-          df_editado = st.data_editor(df, num_rows="dynamic", key="editor_goodcard")
+        st.markdown("### Tabela de Empréstimos")
+        df_editado = st.data_editor(df, num_rows="dynamic", key="editor_goodcard")
 
-          if not df_editado.equals(df):
-             salvar_dados(df_editado)
+        if not df_editado.equals(df):
+           salvar_dados(df_editado)
     
