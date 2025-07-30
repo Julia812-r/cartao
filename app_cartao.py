@@ -192,15 +192,75 @@ elif menu_opcao == "Registros de Empréstimos":
             nome_filtro = st.text_input("Filtrar por Nome do Solicitante")
           with col2:
             veiculo_filtro = st.text_input("Filtrar por Identificação do Veículo")
+          with col3:
+              status_opcoes = df["Status"].unique().tolist()
+              status_filtro = st.multiselect("Filtrar por Status", options=status_opcoes, default=status_opcoes)
 
-          if nome_filtro:
-             df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
-          if veiculo_filtro:
-              df = df[df["Identificação Veículo"].fillna("").astype(str).str.contains(veiculo_filtro, case=False, na=False)]
+        if nome_filtro:
+            df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
+        if veiculo_filtro:
+            df = df[df["Identificação Veículo"].fillna("").astype(str).str.contains(veiculo_filtro, case=False, na=False)]
+        if status_filtro:
+            df = df[df["Status"].isin(status_filtro)]
 
-        st.markdown("### Tabela de Empréstimos")
-        df_editado = st.data_editor(df, num_rows="dynamic", key="editor_goodcard")
+        # Prepara DataFrame para exibição/editável
+        df_exibicao = df.copy()
 
-        if not df_editado.equals(df):
-           salvar_dados(df_editado)
+        # Garante que colunas texto sejam strings e datas formatadas em string
+        colunas_texto = [
+            "Nome Solicitante", "Email Solicitante", "Departamento", "IPN Solicitante", "Centro de Custo", "Telefone Solicitante", "Nome Supervisor", "Email Supervisor",
+            "Motivo", "Identificação Veículo", "Data Registro"
+        ]
+
+        for col in colunas_texto:
+            if col in df_exibicao.columns:
+                df_exibicao[col] = df_exibicao[col].fillna("").astype(str)
+                
+        # Formata as datas para string no formato DD/MM/YYYY para facilitar edição
+        df_exibicao["Previsão Devolução"] = df_exibicao["Previsão Devolução"].dt.strftime("%d/%m/%Y").fillna("")
+        df_exibicao["Data Devolução Real"] = df_exibicao["Data Devolução Real"].dt.strftime("%d/%m/%Y").fillna("")
+
+        # Reordena colunas para exibição
+        ordem_colunas = [
+            "Status",
+            "Previsão Devolução",
+            "Data Devolução Real",
+            "Nome Solicitante",
+            "Email Solicitante",
+            "Departamento",
+            "IPN Solicitante",
+            "Centro de Custo",
+            "Telefone Solicitante",
+            "Nome Supervisor",
+            "Email Supervisor",
+            "Motivo",
+            "Identificação Veículo",
+            "Data Registro",
+        ]
+
+        for col in ordem_colunas:
+            if col not in df_exibicao.columns:
+                if col == "Status":
+                    df_exibicao[col] = df.apply(calcular_status, axis=1)
+                else:
+                    df_exibicao[col] = ""
+                    
+        df_exibicao = df_exibicao[ordem_colunas]
+
+        # Exibe o editor de dados
+        df_editavel = st.data_editor(
+            df_exibicao,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="editor_emprestimos",
+            disabled=["Status"],
+        )
+
+        # Se houver mudanças, salva os dados
+        if not df_editavel.equals(df_exibicao):
+            # Antes de salvar, converte datas de volta para datetime para manter padrão no CSV
+            df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], format="%d/%m/%Y", errors='coerce')
+            df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], format="%d/%m/%Y", errors='coerce')
+
+            salvar_dados(df_editavel)
     
