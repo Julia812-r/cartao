@@ -59,25 +59,33 @@ def carregar_dados():
         ])
 
 def salvar_dados(df):
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         row_dict = row.to_dict()
 
-        # Converte datas
+        # Tratar todas as colunas de data
         for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
-            if pd.isnull(row_dict.get(col)):
+            val = row_dict.get(col)
+            if pd.isnull(val):
                 row_dict[col] = None
-            elif isinstance(row_dict[col], pd.Timestamp):
-                row_dict[col] = row_dict[col].to_pydatetime()
+            elif isinstance(val, pd.Timestamp):
+                row_dict[col] = val.to_pydatetime()
+            elif isinstance(val, str):
+                # Tenta converter strings no formato dd/mm/yyyy
+                try:
+                    row_dict[col] = datetime.strptime(val, "%d/%m/%Y")
+                except:
+                    row_dict[col] = None
 
-        # Pega o ID do Firestore (se existir)
         doc_id = row_dict.get("Firestore_ID")
-        
-        # Se doc_id for inválido ou vazio, cria novo documento
+
         if not doc_id or pd.isna(doc_id):
+            # Cria novo documento
             doc_ref = db.collection(COLLECTION_NAME).add(row_dict)
-            df.at[_, "Firestore_ID"] = doc_ref[1].id
+            df.at[idx, "Firestore_ID"] = doc_ref[1].id
         else:
+            # Atualiza documento existente
             db.collection(COLLECTION_NAME).document(str(doc_id)).set(row_dict)
+
 
 
 def adicionar_registro(novo_dado):
@@ -238,4 +246,5 @@ elif menu_opcao == "Registros de Empréstimos":
             df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], errors='coerce')
             df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], errors='coerce')
             salvar_dados(df_editavel)
+
 
