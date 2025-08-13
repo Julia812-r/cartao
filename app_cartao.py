@@ -281,4 +281,5 @@ elif menu_opcao == "Registros de Empréstimos":
 
         if not df_editavel.equals(df_exibicao):
             salvar_dados(df_editavel)
-            st.success("Registros atualizados com sucesso.")
+            
+
