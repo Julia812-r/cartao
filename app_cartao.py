@@ -174,8 +174,10 @@ if menu_opcao == "Formulário de Solicitação":
                 st.success("Solicitação registrada com sucesso.")
 
 # ----------------- Página: Registros -----------------
+# ----------------- Página: Registros -----------------
 elif menu_opcao == "Registros de Empréstimos":
     st.subheader("Área Protegida - Registros de Empréstimos")
+    
     senha_correta = "renault2025"
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -192,24 +194,30 @@ elif menu_opcao == "Registros de Empréstimos":
 
     if st.session_state["autenticado"]:
         df = carregar_dados()
-        df["Previsão Devolução"] = pd.to_datetime(df["Previsão Devolução"], errors='coerce')
-        df["Data Devolução Real"] = pd.to_datetime(df["Data Devolução Real"], errors='coerce')
+        
+        # Garantir colunas de data como datetime ou None
+        for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
 
+        # Função para calcular Status
         def calcular_status(row):
             hoje = datetime.now().date()
-            if pd.notnull(row["Data Devolução Real"]):
+            if pd.notnull(row.get("Data Devolução Real")):
                 return "Devolvido"
-            elif pd.notnull(row["Previsão Devolução"]) and hoje > row["Previsão Devolução"].date():
+            elif pd.notnull(row.get("Previsão Devolução")) and hoje > row["Previsão Devolução"].date():
                 return "Atrasado"
             else:
                 return "Em aberto"
 
         df["Status"] = df.apply(calcular_status, axis=1)
 
+        # Filtros
         col1, col2, col3 = st.columns(3)
         nome_filtro = col1.text_input("Filtrar por Nome do Solicitante")
         veiculo_filtro = col2.text_input("Filtrar por Identificação do Veículo")
-        status_filtro = col3.multiselect("Filtrar por Status", options=df["Status"].unique().tolist(), default=df["Status"].unique().tolist())
+        status_opcoes = df["Status"].unique().tolist() if not df.empty else []
+        status_filtro = col3.multiselect("Filtrar por Status", options=status_opcoes, default=status_opcoes)
 
         if nome_filtro:
             df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
@@ -218,9 +226,10 @@ elif menu_opcao == "Registros de Empréstimos":
         if status_filtro:
             df = df[df["Status"].isin(status_filtro)]
 
+        # Preparar DataFrame para exibição
         df_exibicao = df.copy()
-        df_exibicao["Previsão Devolução"] = df_exibicao["Previsão Devolução"].dt.strftime("%d/%m/%Y").fillna("")
-        df_exibicao["Data Devolução Real"] = df_exibicao["Data Devolução Real"].dt.strftime("%d/%m/%Y").fillna("")
+        for col in ["Previsão Devolução", "Data Devolução Real"]:
+            df_exibicao[col] = df_exibicao[col].dt.strftime("%d/%m/%Y").fillna("")
 
         ordem_colunas = [
             "Status", "Previsão Devolução", "Data Devolução Real",
@@ -234,6 +243,7 @@ elif menu_opcao == "Registros de Empréstimos":
 
         df_exibicao = df_exibicao[ordem_colunas]
 
+        # Editor de dados
         df_editavel = st.data_editor(
             df_exibicao,
             num_rows="dynamic",
@@ -242,9 +252,33 @@ elif menu_opcao == "Registros de Empréstimos":
             disabled=["Status"],
         )
 
+        # Função de salvamento
+        def salvar_dados(df):
+            for idx, row in df.iterrows():
+                row_dict = row.to_dict()
+                
+                # Converte datas
+                for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
+                    val = row_dict.get(col)
+                    if pd.isnull(val):
+                        row_dict[col] = None
+                    elif isinstance(val, pd.Timestamp):
+                        row_dict[col] = val.to_pydatetime()
+                    elif isinstance(val, str):
+                        try:
+                            row_dict[col] = datetime.strptime(val, "%d/%m/%Y")
+                        except:
+                            row_dict[col] = None
+
+                doc_id = row_dict.get("Firestore_ID")
+                if not doc_id or pd.isna(doc_id):
+                    # Cria novo documento
+                    doc_ref = db.collection(COLLECTION_NAME).add(row_dict)
+                    df.at[idx, "Firestore_ID"] = doc_ref[1].id
+                else:
+                    # Atualiza documento existente
+                    db.collection(COLLECTION_NAME).document(str(doc_id)).set(row_dict)
+
         if not df_editavel.equals(df_exibicao):
-            df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], errors='coerce')
-            df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], errors='coerce')
             salvar_dados(df_editavel)
-
-
+            st.success("Registros atualizados com sucesso.")
