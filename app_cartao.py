@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import os
 from PIL import Image
+from urllib.request import urlopen
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # ----------------- Configurações Iniciais -----------------
 st.set_page_config(
@@ -30,41 +32,52 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Título principal
+# ----------------- Firebase -----------------
+if not firebase_admin._apps:
+    cred = credentials.Certificate(dict(st.secrets["firebase"]))
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+COLLECTION_NAME = "emprestimos_goodcard"
+
+# ----------------- Funções Auxiliares -----------------
+def carregar_dados():
+    docs = db.collection(COLLECTION_NAME).stream()
+    data = [doc.to_dict() for doc in docs]
+    if data:
+        return pd.DataFrame(data)
+    else:
+        return pd.DataFrame(columns=[
+            "Nome Solicitante", "Email Solicitante", "IPN Solicitante", "Departamento",
+            "Centro de Custo", "Telefone Solicitante", "Nome Supervisor", "Email Supervisor",
+            "Motivo", "Previsão Devolução", "Identificação Veículo", "Concorda Regras", "Data Registro",
+            "Cartão", "Data Devolução Real"
+        ])
+
+def salvar_dados(df):
+    # Apaga todos os docs antigos
+    docs = db.collection(COLLECTION_NAME).stream()
+    for doc in docs:
+        db.collection(COLLECTION_NAME).document(doc.id).delete()
+
+    # Reescreve todos os docs
+    for _, row in df.iterrows():
+        db.collection(COLLECTION_NAME).add(row.to_dict())
+
+def adicionar_registro(novo_dado):
+    db.collection(COLLECTION_NAME).add(novo_dado)
+
+# ----------------- Título -----------------
 st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
 st.markdown("<h1 style='text-align: center;'>Controle de Empréstimo - GoodCard</h1>", unsafe_allow_html=True)
 
 # ----------------- Logo na Sidebar -----------------
-from PIL import Image
-from urllib.request import urlopen
-
 try:
     logo_url = "https://storage.googleapis.com/ire-74774-ope/files%2Fmigration%2Ftb_releases-5238-604.jpg"
     logo = Image.open(urlopen(logo_url))
     st.sidebar.image(logo, use_container_width=True)
 except Exception as e:
     st.sidebar.write("Erro ao carregar a logo:", e)
-
-# ----------------- Funções Auxiliares -----------------
-CSV_FILE = "emprestimos_goodcard.csv"
-
-def carregar_dados():
-    if os.path.exists(CSV_FILE):
-        return pd.read_csv(CSV_FILE)
-    else:
-        return pd.DataFrame(columns=[
-            "Nome Solicitante", "Email Solicitante", "IPN Solicitante", "Departamento",
-            "Centro de Custo", "Telefone Solicitante", "Nome Supervisor", "Email Supervisor",
-            "Motivo", "Previsão Devolução", "Identificação Veículo", "Concorda Regras", "Data Registro"
-        ])
-
-def salvar_dados(df):
-    df.to_csv(CSV_FILE, index=False)
-
-def adicionar_registro(novo_dado):
-    df = carregar_dados()
-    df = pd.concat([df, pd.DataFrame([novo_dado])], ignore_index=True)
-    salvar_dados(df)
 
 # ----------------- Menu Lateral -----------------
 menu_opcao = st.sidebar.selectbox("Navegação", ["Formulário de Solicitação", "Registros de Empréstimos"])
@@ -74,9 +87,7 @@ if menu_opcao == "Formulário de Solicitação":
     st.subheader("Regras para Empréstimo e Utilização de Cartão GoodCard")
 
     with st.expander("Clique para ler as regras de utilização do Cartão GoodCard"):
-        regras = """
-A pesquisa levará aproximadamente 7 minutos para ser concluída.
-
+        st.markdown("""
 ### REGRAS PARA EMPRÉSTIMO E UTILIZAÇÃO DE CARTÕES COMBUSTÍVEL:
 1. Para empréstimo de Cartões Combustível é necessária a aprovação do Gestor do solicitante e do Chefe do atelier DE-TV (via Flow);
 2. Todo o uso particular é rigorosamente PROIBIDO;
@@ -88,8 +99,7 @@ A pesquisa levará aproximadamente 7 minutos para ser concluída.
 8. A utilização correta do cartão é de inteira responsabilidade do solicitante, todos os gastos desvinculados a projetos Renault serão devidamente repassados ao solicitante.
 9. A Devolução do Cartão Combustível deverá ocorrer imediatamente após a finalização do período de empréstimo.
 10. Use com responsabilidade - Temos o controle e monitoramento dos resultados de abastecimentos.
-        """
-        st.markdown(regras)
+        """)
 
     st.subheader("Formulário de Solicitação de Empréstimo")
 
@@ -132,7 +142,9 @@ A pesquisa levará aproximadamente 7 minutos para ser concluída.
                     "Previsão Devolução": previsao.strftime("%d/%m/%Y"),
                     "Identificação Veículo": identificacao,
                     "Concorda Regras": "SIM",
-                    "Data Registro": datetime.now().strftime("%d/%m/%Y %H:%M")
+                    "Data Registro": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "Cartão": "",
+                    "Data Devolução Real": ""
                 }
                 adicionar_registro(dados)
                 st.success("Solicitação registrada com sucesso.")
@@ -141,14 +153,10 @@ A pesquisa levará aproximadamente 7 minutos para ser concluída.
 elif menu_opcao == "Registros de Empréstimos":
     st.subheader("Área Protegida - Registros de Empréstimos")
 
-    # Define a senha correta
     senha_correta = "renault2025"
-
-    # Inicializa o estado de autenticação
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
 
-    # Se ainda não autenticado, pede a senha
     if not st.session_state["autenticado"]:
         senha_entrada = st.text_input("🔐 Digite a senha para acessar os registros:", type="password")
         if senha_entrada == senha_correta:
@@ -159,21 +167,13 @@ elif menu_opcao == "Registros de Empréstimos":
         else:
             st.info("Digite a senha para visualizar os registros.")
 
-    # Se autenticado, exibe os dados
     if st.session_state["autenticado"]:
         df = carregar_dados()
-        
-        # Adiciona colunas se não existirem
-        if "Cartão" not in df.columns:
-            df["Cartão"] = ""
-        if "Data Devolução Real" not in df.columns:
-            df["Data Devolução Real"] = ""
 
-        # Converte datas para datetime
+        # Converte datas
         df["Previsão Devolução"] = pd.to_datetime(df["Previsão Devolução"], dayfirst=True, errors='coerce')
         df["Data Devolução Real"] = pd.to_datetime(df["Data Devolução Real"], dayfirst=True, errors='coerce')
 
-        # Define status
         def calcular_status(row):
             hoje = datetime.now().date()
             if pd.notnull(row["Data Devolução Real"]):
@@ -186,15 +186,14 @@ elif menu_opcao == "Registros de Empréstimos":
         df["Status"] = df.apply(calcular_status, axis=1)
 
         # Filtros
-        with st.container():
-          col1, col2, col3 = st.columns(3)
-          with col1:
+        col1, col2, col3 = st.columns(3)
+        with col1:
             nome_filtro = st.text_input("Filtrar por Nome do Solicitante")
-          with col2:
+        with col2:
             veiculo_filtro = st.text_input("Filtrar por Identificação do Veículo")
-          with col3:
-              status_opcoes = df["Status"].unique().tolist()
-              status_filtro = st.multiselect("Filtrar por Status", options=status_opcoes, default=status_opcoes)
+        with col3:
+            status_opcoes = df["Status"].unique().tolist()
+            status_filtro = st.multiselect("Filtrar por Status", options=status_opcoes, default=status_opcoes)
 
         if nome_filtro:
             df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
@@ -203,52 +202,23 @@ elif menu_opcao == "Registros de Empréstimos":
         if status_filtro:
             df = df[df["Status"].isin(status_filtro)]
 
-        # Prepara DataFrame para exibição/editável
+        # Exibição
         df_exibicao = df.copy()
-
-        # Garante que colunas texto sejam strings e datas formatadas em string
-        colunas_texto = [
-            "Nome Solicitante", "Email Solicitante", "Departamento", "IPN Solicitante", "Centro de Custo", "Telefone Solicitante", "Nome Supervisor", "Email Supervisor",
-            "Motivo", "Identificação Veículo", "Cartão", "Data Registro"
-        ]
-
-        for col in colunas_texto:
-            if col in df_exibicao.columns:
-                df_exibicao[col] = df_exibicao[col].fillna("").astype(str)
-                
-        # Formata as datas para string no formato DD/MM/YYYY para facilitar edição
         df_exibicao["Previsão Devolução"] = df_exibicao["Previsão Devolução"].dt.strftime("%d/%m/%Y").fillna("")
         df_exibicao["Data Devolução Real"] = df_exibicao["Data Devolução Real"].dt.strftime("%d/%m/%Y").fillna("")
 
-        # Reordena colunas para exibição
         ordem_colunas = [
-            "Status",
-            "Previsão Devolução",
-            "Data Devolução Real",
-            "Nome Solicitante",
-            "Email Solicitante",
-            "Departamento",
-            "IPN Solicitante",
-            "Centro de Custo",
-            "Telefone Solicitante",
-            "Nome Supervisor",
-            "Email Supervisor",
-            "Motivo",
-            "Identificação Veículo",
-            "Cartão",
-            "Data Registro",
+            "Status", "Previsão Devolução", "Data Devolução Real",
+            "Nome Solicitante", "Email Solicitante", "Departamento", "IPN Solicitante", "Centro de Custo",
+            "Telefone Solicitante", "Nome Supervisor", "Email Supervisor", "Motivo",
+            "Identificação Veículo", "Cartão", "Data Registro"
         ]
-
         for col in ordem_colunas:
             if col not in df_exibicao.columns:
-                if col == "Status":
-                    df_exibicao[col] = df.apply(calcular_status, axis=1)
-                else:
-                    df_exibicao[col] = ""
-                    
+                df_exibicao[col] = ""
+
         df_exibicao = df_exibicao[ordem_colunas]
 
-        # Exibe o editor de dados
         df_editavel = st.data_editor(
             df_exibicao,
             num_rows="dynamic",
@@ -257,11 +227,7 @@ elif menu_opcao == "Registros de Empréstimos":
             disabled=["Status"],
         )
 
-        # Se houver mudanças, salva os dados
         if not df_editavel.equals(df_exibicao):
-            # Antes de salvar, converte datas de volta para datetime para manter padrão no CSV
             df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], format="%d/%m/%Y", errors='coerce')
             df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], format="%d/%m/%Y", errors='coerce')
-
             salvar_dados(df_editavel)
-    
