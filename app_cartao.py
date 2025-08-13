@@ -45,49 +45,45 @@ def carregar_dados():
     docs = db.collection(COLLECTION_NAME).stream()
     data = [doc.to_dict() for doc in docs]
     if data:
-        return pd.DataFrame(data)
+        df = pd.DataFrame(data)
+        # Mantém o ID do Firestore
+        for i, doc in enumerate(db.collection(COLLECTION_NAME).stream()):
+            df.at[i, "Firestore_ID"] = doc.id
+        return df
     else:
         return pd.DataFrame(columns=[
             "Nome Solicitante", "Email Solicitante", "IPN Solicitante", "Departamento",
             "Centro de Custo", "Telefone Solicitante", "Nome Supervisor", "Email Supervisor",
             "Motivo", "Previsão Devolução", "Identificação Veículo", "Concorda Regras", "Data Registro",
-            "Cartão", "Data Devolução Real"
+            "Cartão", "Data Devolução Real", "Firestore_ID"
         ])
 
 def salvar_dados(df):
-    """
-    Salva os dados no Firestore sem apagar documentos antigos.
-    Atualiza documentos existentes (com ID) ou cria novos.
-    """
     for _, row in df.iterrows():
         row_dict = row.to_dict()
-        
-        # Converte datas para Firestore
+
+        # Converte datas
         for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
             if pd.isnull(row_dict.get(col)):
                 row_dict[col] = None
             elif isinstance(row_dict[col], pd.Timestamp):
                 row_dict[col] = row_dict[col].to_pydatetime()
 
-        # Se houver coluna "Firestore_ID", atualiza; senão cria novo
         doc_id = row_dict.get("Firestore_ID")
         if doc_id:
+            # Atualiza documento existente
             db.collection(COLLECTION_NAME).document(doc_id).set(row_dict)
         else:
+            # Cria novo documento e salva o ID
             doc_ref = db.collection(COLLECTION_NAME).add(row_dict)
-            # Salva o ID do Firestore no DataFrame
             df.at[_, "Firestore_ID"] = doc_ref[1].id
 
 def adicionar_registro(novo_dado):
-    """
-    Adiciona um novo registro no Firestore.
-    """
     for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
         if col in novo_dado and isinstance(novo_dado[col], pd.Timestamp):
             novo_dado[col] = novo_dado[col].to_pydatetime()
     doc_ref = db.collection(COLLECTION_NAME).add(novo_dado)
     novo_dado["Firestore_ID"] = doc_ref[1].id
-
 
 # ----------------- Título -----------------
 st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
@@ -107,7 +103,6 @@ menu_opcao = st.sidebar.selectbox("Navegação", ["Formulário de Solicitação"
 # ----------------- Página: Formulário -----------------
 if menu_opcao == "Formulário de Solicitação":
     st.subheader("Regras para Empréstimo e Utilização de Cartão GoodCard")
-
     with st.expander("Clique para ler as regras de utilização do Cartão GoodCard"):
         st.markdown("""
 ### REGRAS PARA EMPRÉSTIMO E UTILIZAÇÃO DE CARTÕES COMBUSTÍVEL:
@@ -124,25 +119,22 @@ if menu_opcao == "Formulário de Solicitação":
         """)
 
     st.subheader("Formulário de Solicitação de Empréstimo")
-
     with st.form("form_goodcard"):
         col1, col2 = st.columns(2)
         with col1:
-            nome = st.text_input("Nome Completo do Solicitante", placeholder="João da Silva")
-            email = st.text_input("Email do Solicitante", placeholder="joao.silva@renault.com")
-            ipn = st.text_input("IPN do Solicitante", placeholder="PM51532")
-            departamento = st.text_input("Departamento", placeholder="DE-TR")
-            centro_custo = st.text_input("Centro de Custo", placeholder="GI31000")
-            telefone = st.text_input("Telefone de Contato", placeholder="41988774433")
+            nome = st.text_input("Nome Completo do Solicitante")
+            email = st.text_input("Email do Solicitante")
+            ipn = st.text_input("IPN do Solicitante")
+            departamento = st.text_input("Departamento")
+            centro_custo = st.text_input("Centro de Custo")
+            telefone = st.text_input("Telefone de Contato")
         with col2:
-            nome_sup = st.text_input("Nome Completo do Supervisor", placeholder="Mario de Andrade")
-            email_sup = st.text_input("Email do Supervisor", placeholder="mario.andrade@renault.com")
-            previsao = st.date_input("Previsão de Devolução", format="DD/MM/YYYY")
-            identificacao = st.text_input("Identificação do Veículo", placeholder="SV6122 ou Chassi")
-
-        motivo = st.text_area("Local e motivo da utilização", placeholder="Circuitos LPC para ensaio de durabilidade do projeto XXX")
+            nome_sup = st.text_input("Nome Completo do Supervisor")
+            email_sup = st.text_input("Email do Supervisor")
+            previsao = st.date_input("Previsão de Devolução")
+            identificacao = st.text_input("Identificação do Veículo")
+        motivo = st.text_area("Local e motivo da utilização")
         concorda = st.checkbox("Declaro que li e estou de acordo com as Regras para Empréstimo e Utilização de Cartão Combustível.")
-
         submit = st.form_submit_button("Enviar Solicitação")
 
         if submit:
@@ -174,7 +166,6 @@ if menu_opcao == "Formulário de Solicitação":
 # ----------------- Página: Registros -----------------
 elif menu_opcao == "Registros de Empréstimos":
     st.subheader("Área Protegida - Registros de Empréstimos")
-
     senha_correta = "renault2025"
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -191,10 +182,8 @@ elif menu_opcao == "Registros de Empréstimos":
 
     if st.session_state["autenticado"]:
         df = carregar_dados()
-
-        # Converte datas
-        df["Previsão Devolução"] = pd.to_datetime(df["Previsão Devolução"], dayfirst=True, errors='coerce')
-        df["Data Devolução Real"] = pd.to_datetime(df["Data Devolução Real"], dayfirst=True, errors='coerce')
+        df["Previsão Devolução"] = pd.to_datetime(df["Previsão Devolução"], errors='coerce')
+        df["Data Devolução Real"] = pd.to_datetime(df["Data Devolução Real"], errors='coerce')
 
         def calcular_status(row):
             hoje = datetime.now().date()
@@ -207,15 +196,10 @@ elif menu_opcao == "Registros de Empréstimos":
 
         df["Status"] = df.apply(calcular_status, axis=1)
 
-        # Filtros
         col1, col2, col3 = st.columns(3)
-        with col1:
-            nome_filtro = st.text_input("Filtrar por Nome do Solicitante")
-        with col2:
-            veiculo_filtro = st.text_input("Filtrar por Identificação do Veículo")
-        with col3:
-            status_opcoes = df["Status"].unique().tolist()
-            status_filtro = st.multiselect("Filtrar por Status", options=status_opcoes, default=status_opcoes)
+        nome_filtro = col1.text_input("Filtrar por Nome do Solicitante")
+        veiculo_filtro = col2.text_input("Filtrar por Identificação do Veículo")
+        status_filtro = col3.multiselect("Filtrar por Status", options=df["Status"].unique().tolist(), default=df["Status"].unique().tolist())
 
         if nome_filtro:
             df = df[df["Nome Solicitante"].astype(str).str.contains(nome_filtro, case=False, na=False)]
@@ -224,7 +208,6 @@ elif menu_opcao == "Registros de Empréstimos":
         if status_filtro:
             df = df[df["Status"].isin(status_filtro)]
 
-        # Exibição
         df_exibicao = df.copy()
         df_exibicao["Previsão Devolução"] = df_exibicao["Previsão Devolução"].dt.strftime("%d/%m/%Y").fillna("")
         df_exibicao["Data Devolução Real"] = df_exibicao["Data Devolução Real"].dt.strftime("%d/%m/%Y").fillna("")
@@ -233,7 +216,7 @@ elif menu_opcao == "Registros de Empréstimos":
             "Status", "Previsão Devolução", "Data Devolução Real",
             "Nome Solicitante", "Email Solicitante", "Departamento", "IPN Solicitante", "Centro de Custo",
             "Telefone Solicitante", "Nome Supervisor", "Email Supervisor", "Motivo",
-            "Identificação Veículo", "Cartão", "Data Registro"
+            "Identificação Veículo", "Cartão", "Data Registro", "Firestore_ID"
         ]
         for col in ordem_colunas:
             if col not in df_exibicao.columns:
@@ -250,7 +233,6 @@ elif menu_opcao == "Registros de Empréstimos":
         )
 
         if not df_editavel.equals(df_exibicao):
-            df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], format="%d/%m/%Y", errors='coerce')
-            df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], format="%d/%m/%Y", errors='coerce')
+            df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], errors='coerce')
+            df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], errors='coerce')
             salvar_dados(df_editavel)
-
