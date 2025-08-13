@@ -62,9 +62,20 @@ def salvar_dados(df):
 
     # Reescreve todos os docs
     for _, row in df.iterrows():
-        db.collection(COLLECTION_NAME).add(row.to_dict())
+        row_dict = row.to_dict()
+        # Corrige datas para Firestore
+        for col in ["Previsão Devolução", "Data Devolução Real"]:
+            if pd.isnull(row_dict.get(col)):
+                row_dict[col] = None
+            elif isinstance(row_dict[col], pd.Timestamp):
+                row_dict[col] = row_dict[col].to_pydatetime()
+        db.collection(COLLECTION_NAME).add(row_dict)
 
 def adicionar_registro(novo_dado):
+    # Converte datas para datetime nativo
+    for col in ["Previsão Devolução", "Data Devolução Real"]:
+        if col in novo_dado and isinstance(novo_dado[col], pd.Timestamp):
+            novo_dado[col] = novo_dado[col].to_pydatetime()
     db.collection(COLLECTION_NAME).add(novo_dado)
 
 # ----------------- Título -----------------
@@ -139,12 +150,12 @@ if menu_opcao == "Formulário de Solicitação":
                     "Nome Supervisor": nome_sup,
                     "Email Supervisor": email_sup,
                     "Motivo": motivo,
-                    "Previsão Devolução": previsao.strftime("%d/%m/%Y"),
+                    "Previsão Devolução": previsao,
                     "Identificação Veículo": identificacao,
                     "Concorda Regras": "SIM",
-                    "Data Registro": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "Data Registro": datetime.now(),
                     "Cartão": "",
-                    "Data Devolução Real": ""
+                    "Data Devolução Real": None
                 }
                 adicionar_registro(dados)
                 st.success("Solicitação registrada com sucesso.")
