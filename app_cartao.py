@@ -55,28 +55,39 @@ def carregar_dados():
         ])
 
 def salvar_dados(df):
-    # Apaga todos os docs antigos
-    docs = db.collection(COLLECTION_NAME).stream()
-    for doc in docs:
-        db.collection(COLLECTION_NAME).document(doc.id).delete()
-
-    # Reescreve todos os docs
+    """
+    Salva os dados no Firestore sem apagar documentos antigos.
+    Atualiza documentos existentes (com ID) ou cria novos.
+    """
     for _, row in df.iterrows():
         row_dict = row.to_dict()
-        # Corrige datas para Firestore
-        for col in ["Previsão Devolução", "Data Devolução Real"]:
+        
+        # Converte datas para Firestore
+        for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
             if pd.isnull(row_dict.get(col)):
                 row_dict[col] = None
             elif isinstance(row_dict[col], pd.Timestamp):
                 row_dict[col] = row_dict[col].to_pydatetime()
-        db.collection(COLLECTION_NAME).add(row_dict)
+
+        # Se houver coluna "Firestore_ID", atualiza; senão cria novo
+        doc_id = row_dict.get("Firestore_ID")
+        if doc_id:
+            db.collection(COLLECTION_NAME).document(doc_id).set(row_dict)
+        else:
+            doc_ref = db.collection(COLLECTION_NAME).add(row_dict)
+            # Salva o ID do Firestore no DataFrame
+            df.at[_, "Firestore_ID"] = doc_ref[1].id
 
 def adicionar_registro(novo_dado):
-    # Converte datas para datetime nativo
-    for col in ["Previsão Devolução", "Data Devolução Real"]:
+    """
+    Adiciona um novo registro no Firestore.
+    """
+    for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
         if col in novo_dado and isinstance(novo_dado[col], pd.Timestamp):
             novo_dado[col] = novo_dado[col].to_pydatetime()
-    db.collection(COLLECTION_NAME).add(novo_dado)
+    doc_ref = db.collection(COLLECTION_NAME).add(novo_dado)
+    novo_dado["Firestore_ID"] = doc_ref[1].id
+
 
 # ----------------- Título -----------------
 st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
@@ -242,3 +253,4 @@ elif menu_opcao == "Registros de Empréstimos":
             df_editavel["Previsão Devolução"] = pd.to_datetime(df_editavel["Previsão Devolução"], format="%d/%m/%Y", errors='coerce')
             df_editavel["Data Devolução Real"] = pd.to_datetime(df_editavel["Data Devolução Real"], format="%d/%m/%Y", errors='coerce')
             salvar_dados(df_editavel)
+
