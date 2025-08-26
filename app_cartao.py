@@ -6,6 +6,19 @@ from urllib.request import urlopen
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+def converter_data(val):
+    if pd.isnull(val):
+        return None
+    elif isinstance(val, pd.Timestamp):
+        return val.to_pydatetime()
+    elif isinstance(val, str):
+        try:
+            return datetime.strptime(val, "%d/%m/%Y")
+        except:
+            return None
+    return val
+
+
 # ----------------- Configurações Iniciais -----------------
 st.set_page_config(
     page_title="Controle de Empréstimo de Cartão GoodCard",
@@ -42,14 +55,13 @@ COLLECTION_NAME = "emprestimos_goodcard"
 
 # ----------------- Funções Auxiliares -----------------
 def carregar_dados():
-    docs = db.collection(COLLECTION_NAME).stream()
-    data = [doc.to_dict() for doc in docs]
+    data = []
+    for doc in db.collection(COLLECTION_NAME).stream():
+        d = doc.to_dict()
+        d["Firestore_ID"] = doc.id
+        data.append(d)
     if data:
-        df = pd.DataFrame(data)
-        # Mantém o ID do Firestore
-        for i, doc in enumerate(db.collection(COLLECTION_NAME).stream()):
-            df.at[i, "Firestore_ID"] = doc.id
-        return df
+        return pd.DataFrame(data)
     else:
         return pd.DataFrame(columns=[
             "Nome Solicitante", "Email Solicitante", "IPN Solicitante", "Departamento",
@@ -174,7 +186,6 @@ if menu_opcao == "Formulário de Solicitação":
                 st.success("Solicitação registrada com sucesso.")
 
 # ----------------- Página: Registros -----------------
-# ----------------- Página: Registros -----------------
 elif menu_opcao == "Registros de Empréstimos":
     st.subheader("Área Protegida - Registros de Empréstimos")
     
@@ -282,4 +293,5 @@ elif menu_opcao == "Registros de Empréstimos":
         if not df_editavel.equals(df_exibicao):
             salvar_dados(df_editavel)
             
+
 
