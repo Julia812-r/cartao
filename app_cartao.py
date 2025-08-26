@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from PIL import Image
 from urllib.request import urlopen
@@ -17,6 +18,28 @@ def converter_data(val):
         except:
             return None
     return val
+
+
+def limpar_valores_para_firestore(dados):
+    """
+    Converte todos os valores de um dicionário para tipos aceitos pelo Firestore.
+    """
+    dados_limpos = {}
+    for k, v in dados.items():
+        if v is None or pd.isnull(v):
+            dados_limpos[k] = None
+        elif isinstance(v, pd.Timestamp):
+            dados_limpos[k] = v.to_pydatetime()
+        elif isinstance(v, datetime.date) and not isinstance(v, datetime):
+            dados_limpos[k] = datetime(v.year, v.month, v.day)
+        elif isinstance(v, (np.integer, np.floating)):
+            dados_limpos[k] = v.item()  # Converte numpy types para int/float nativos
+        elif isinstance(v, (int, float, bool, str)):
+            dados_limpos[k] = v
+        else:
+            # Para qualquer outro tipo, converte para string
+            dados_limpos[k] = str(v)
+    return dados_limpos
 
 
 # ----------------- Configurações Iniciais -----------------
@@ -99,33 +122,22 @@ def salvar_dados(df):
             db.collection(COLLECTION_NAME).document(str(doc_id)).set(row_dict)
 
 
+
 def adicionar_registro(novo_dado):
-    import numpy as np
-    
-    for key, val in novo_dado.items():
-        # Trata datas
-        if key in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
-            if isinstance(val, pd.Timestamp):
-                novo_dado[key] = val.to_pydatetime()
-            elif isinstance(val, datetime.date) and not isinstance(val, datetime):
-                novo_dado[key] = datetime(val.year, val.month, val.day)
-            elif val is None or pd.isnull(val):
-                novo_dado[key] = None
-            else:
-                try:
-                    novo_dado[key] = datetime.strptime(str(val), "%d/%m/%Y")
-                except:
-                    novo_dado[key] = None
-        else:
-            # Converte qualquer NaN ou tipo inválido para None ou string
-            if val is None or pd.isnull(val) or isinstance(val, np.generic):
-                novo_dado[key] = None
-            elif isinstance(val, (int, float, bool, str)):
-                continue
-            else:
-                # Para outros tipos complexos, converte para string
-                novo_dado[key] = str(val)
-    
+    """
+    Adiciona um registro no Firestore garantindo que todos os valores sejam válidos.
+    """
+    # Limpa os valores para tipos compatíveis com Firestore
+    novo_dado = limpar_valores_para_firestore(novo_dado)
+
+    # Adiciona o documento no Firestore
+    doc_ref = db.collection(COLLECTION_NAME).add(novo_dado)
+
+    # Atualiza o ID do Firestore no próprio dicionário
+    novo_dado["Firestore_ID"] = doc_ref[1].id
+
+    return novo_dado
+
     # Adiciona no Firestore
     doc_ref = db.collection(COLLECTION_NAME).add(novo_dado)
     novo_dado["Firestore_ID"] = doc_ref[1].id
@@ -328,3 +340,4 @@ elif menu_opcao == "Registros de Empréstimos":
 
 
         
+
