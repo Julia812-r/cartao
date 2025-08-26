@@ -98,24 +98,35 @@ def salvar_dados(df):
             # Atualiza documento existente
             db.collection(COLLECTION_NAME).document(str(doc_id)).set(row_dict)
 
+
 def adicionar_registro(novo_dado):
-    for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
-        if col in novo_dado:
-            val = novo_dado[col]
-            # Se for datetime.date, converte para datetime.datetime
-            if isinstance(val, datetime.date) and not isinstance(val, datetime):
-                novo_dado[col] = datetime(val.year, val.month, val.day)
-            # Se for pd.Timestamp, converte
-            elif isinstance(val, pd.Timestamp):
-                novo_dado[col] = val.to_pydatetime()
-            # Se for None, mantém
-            elif val is None:
-                continue
-            # Qualquer outro tipo inválido -> None
+    import numpy as np
+    
+    for key, val in novo_dado.items():
+        # Trata datas
+        if key in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
+            if isinstance(val, pd.Timestamp):
+                novo_dado[key] = val.to_pydatetime()
+            elif isinstance(val, datetime.date) and not isinstance(val, datetime):
+                novo_dado[key] = datetime(val.year, val.month, val.day)
+            elif val is None or pd.isnull(val):
+                novo_dado[key] = None
             else:
-                novo_dado[col] = converter_data(val)
-                
-    # Agora adiciona no Firestore
+                try:
+                    novo_dado[key] = datetime.strptime(str(val), "%d/%m/%Y")
+                except:
+                    novo_dado[key] = None
+        else:
+            # Converte qualquer NaN ou tipo inválido para None ou string
+            if val is None or pd.isnull(val) or isinstance(val, np.generic):
+                novo_dado[key] = None
+            elif isinstance(val, (int, float, bool, str)):
+                continue
+            else:
+                # Para outros tipos complexos, converte para string
+                novo_dado[key] = str(val)
+    
+    # Adiciona no Firestore
     doc_ref = db.collection(COLLECTION_NAME).add(novo_dado)
     novo_dado["Firestore_ID"] = doc_ref[1].id
 
@@ -276,36 +287,44 @@ elif menu_opcao == "Registros de Empréstimos":
             disabled=["Status"],
         )
 
-        # Função de salvamento
+        # Função de salvamento segura
         def salvar_dados(df):
+            import numpy as np
             for idx, row in df.iterrows():
                 row_dict = row.to_dict()
+                for key, val in row_dict.items():
+                    # Datas
+                    if key in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
+                        if isinstance(val, pd.Timestamp):
+                            row_dict[key] = val.to_pydatetime()
+                        elif isinstance(val, datetime.date) and not isinstance(val, datetime):
+                            row_dict[key] = datetime(val.year, val.month, val.day)
+                        elif val is None or pd.isnull(val):
+                            row_dict[key] = None
+                        else:
+                            try:
+                                row_dict[key] = datetime.strptime(str(val), "%d/%m/%Y")
+                            except:
+                                row_dict[key] = None
+                    else:
+                        # Converte tipos inválidos
+                        if val is None or pd.isnull(val) or isinstance(val, np.generic):
+                            row_dict[key] = None
+                        elif isinstance(val, (int, float, bool, str)):
+                            continue
+                        else:
+                            row_dict[key] = str(val)
                 
-                # Converte datas
-                for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
-                    val = row_dict.get(col)
-                    if pd.isnull(val):
-                        row_dict[col] = None
-                    elif isinstance(val, pd.Timestamp):
-                        row_dict[col] = val.to_pydatetime()
-                    elif isinstance(val, str):
-                        try:
-                            row_dict[col] = datetime.strptime(val, "%d/%m/%Y")
-                        except:
-                            row_dict[col] = None
-
                 doc_id = row_dict.get("Firestore_ID")
                 if not doc_id or pd.isna(doc_id):
-                    # Cria novo documento
                     doc_ref = db.collection(COLLECTION_NAME).add(row_dict)
                     df.at[idx, "Firestore_ID"] = doc_ref[1].id
                 else:
-                    # Atualiza documento existente
                     db.collection(COLLECTION_NAME).document(str(doc_id)).set(row_dict)
 
+        # Salvar alterações se houver mudanças
         if not df_editavel.equals(df_exibicao):
             salvar_dados(df_editavel)
-            
 
 
-
+        
