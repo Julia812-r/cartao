@@ -98,14 +98,27 @@ def salvar_dados(df):
             # Atualiza documento existente
             db.collection(COLLECTION_NAME).document(str(doc_id)).set(row_dict)
 
-
-
 def adicionar_registro(novo_dado):
     for col in ["Previsão Devolução", "Data Devolução Real", "Data Registro"]:
-        if col in novo_dado and isinstance(novo_dado[col], pd.Timestamp):
-            novo_dado[col] = novo_dado[col].to_pydatetime()
+        if col in novo_dado:
+            val = novo_dado[col]
+            # Se for datetime.date, converte para datetime.datetime
+            if isinstance(val, datetime.date) and not isinstance(val, datetime):
+                novo_dado[col] = datetime(val.year, val.month, val.day)
+            # Se for pd.Timestamp, converte
+            elif isinstance(val, pd.Timestamp):
+                novo_dado[col] = val.to_pydatetime()
+            # Se for None, mantém
+            elif val is None:
+                continue
+            # Qualquer outro tipo inválido -> None
+            else:
+                novo_dado[col] = converter_data(val)
+                
+    # Agora adiciona no Firestore
     doc_ref = db.collection(COLLECTION_NAME).add(novo_dado)
     novo_dado["Firestore_ID"] = doc_ref[1].id
+
 
 # ----------------- Título -----------------
 st.markdown('<div class="titulo-renault">RENAULT</div>', unsafe_allow_html=True)
@@ -293,5 +306,6 @@ elif menu_opcao == "Registros de Empréstimos":
         if not df_editavel.equals(df_exibicao):
             salvar_dados(df_editavel)
             
+
 
 
